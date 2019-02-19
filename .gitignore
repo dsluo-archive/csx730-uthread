@@ -6,3 +6,5 @@ a.out
 core.*
 *.dSYM/
 
+.vscode/
+doc/

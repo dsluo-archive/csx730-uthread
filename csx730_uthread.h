@@ -1,5 +1,6 @@
 #ifndef CSX730_UTHREAD_H
 #define CSX730_UTHREAD_H
+#define _GNU_SOURCE
 
 #include <errno.h>
 
@@ -247,6 +248,17 @@ int uthread_create_priority(uthread * thread, uthread_func * func, uthread_arg a
 
 
 #endif // _CS6730_SOURCE
+
+struct uthread_node {
+    uthread * thread;
+    struct uthread_node * next;
+
+};
+
+struct uthread_queue {
+    struct uthread_node * head;
+    struct uthread_node * tail;
+};
 
 #endif // CSX730_UTHREAD_H
 
