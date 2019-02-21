@@ -2,9 +2,9 @@
 
 ## Author Information
 
-* __Full Name:__ Your Name Here
-* __UGA Email:__ `your.email@uga.edu`
-* __Course:__ CSCI ????
+* __Full Name:__ David
+* __UGA Email:__ `davidluo@uga.edu`
+* __Course:__ CSCI 4730
 
 ## Implementation Overview
 
@@ -14,8 +14,6 @@ You need to include a few sentences that provide an overview of your implementat
 
 I would like the grader to check for the following 6730 requirements:
 
-* __[PRETTY]__
-* __[DRIVER]__
 
 ## Reflecton
 
