@@ -24,13 +24,15 @@ struct uthread_node {
 };
 
 void _uthread_sched_enqueue(uthread * thread) {
-    struct uthread_node node = {thread, NULL};
+    struct uthread_node * node = malloc(sizeof(struct uthread_node));;
+    node->thread = thread;
+    node->next = NULL;
 
     if (uthread_scheduler.head == NULL) {
-        uthread_scheduler.head = uthread_scheduler.tail = &node;
+        uthread_scheduler.head = uthread_scheduler.tail = node;
     } else {
-        uthread_scheduler.tail->next = &node;
-        uthread_scheduler.tail = &node;
+        uthread_scheduler.tail->next = node;
+        uthread_scheduler.tail = node;
     }
 
     uthread_scheduler.count++;
@@ -41,7 +43,9 @@ uthread * _uthread_sched_dequeue(void) {
         return NULL;
     } else {
         uthread * thread = uthread_scheduler.head->thread;
+        struct uthread_node * old_head = uthread_scheduler.head;
         uthread_scheduler.head = uthread_scheduler.head->next;
+        free(old_head);
         uthread_scheduler.count--;
         return thread;
     }
@@ -51,8 +55,9 @@ uthread * _uthread_sched_dequeue(void) {
 
 struct uthread_extra {
     uthread_func * func;
-    uthread_arg * arg;
+    uthread_arg arg;
     jmp_buf * ctx;
+    uthread * wait_target;
 };
 
 void uthread_clear(uthread * thread) {
@@ -66,39 +71,64 @@ void interrupt(int signum) {
     uthread * thread = _uthread_sched_dequeue();
     if (thread == NULL)
         return;
+    
+    switch (thread->state)
+    {
+        case NEW:
+        case WAITING:
+        case RUNNING: {
 
-    if (thread->state == NEW || thread->state == RUNNING) {
-        // Save current context.
-        _uthread_sched_enqueue(uthread_scheduler.current);
+            // Save current context.
+            _uthread_sched_enqueue(uthread_scheduler.current);
 
-        jmp_buf ctx;
-        setjmp(ctx);
+            jmp_buf ctx;
+            setjmp(ctx);
 
-        ((struct uthread_extra *) uthread_scheduler.current->extra)->ctx = &ctx;
-        uthread_scheduler.current->state = WAITING;
-    } else {
-        return;
+            struct uthread_extra * extra = uthread_scheduler.current->extra;
+            extra->ctx = &ctx;
+
+            uthread_scheduler.current = thread;
+            break;
+        }
+        default: // DONE
+            return;
     }
 
-    if (thread->state == NEW) {
-        uthread_scheduler.current = thread;
-        uthread_scheduler.current->state = RUNNING;
-        struct uthread_extra * extra = uthread_scheduler.current->extra;
-        uthread_func * func = extra->func;
-        uthread_arg * arg = extra->arg;
-        void * rsptr = uthread_scheduler.current->stack.rsp;
-        __asm__("movq %0, %%rsp;"
-                :
-                : "r" (rsptr)
-                : "rsp");
-        (*func)(arg);
-        uthread_scheduler.current->state = DONE;
-    } else if (thread->state == WAITING) {
-        uthread_scheduler.current = thread;
-        uthread_scheduler.current->state = RUNNING;
-        struct uthread_extra * extra = uthread_scheduler.current->extra;
-        longjmp(*extra->ctx, 0);
+    switch (thread->state)
+    {
+        case NEW: {
+
+            uthread_scheduler.current = thread;
+            thread->state = RUNNING;
+            struct uthread_extra * extra = thread->extra;
+            uthread_func * func = extra->func;
+            uthread_arg arg = extra->arg;
+            void * rsptr = thread->stack.rsp;
+            __asm__("movq %0, %%rsp;"
+                    :
+                    : "r" (rsptr)
+                    : "rsp");
+            (*func)(arg);
+            thread->state = DONE;
+            break;
+        }
+        case WAITING: {
+            struct uthread_extra * extra = thread->extra;
+            if (extra->wait_target->state == DONE)
+                thread->state = RUNNING;
+            break;
+        }
+        default:
+            break;
     }
+
+    // if (thread->state == NEW) {
+    // } else if (thread->state == WAITING) {
+    //     uthread_scheduler.current = thread;
+    //     uthread_scheduler.current->state = RUNNING;
+    //     struct uthread_extra * extra = uthread_scheduler.current->extra;
+    //     longjmp(*extra->ctx, 0);
+    // }
 }
 
 int uthread_create(uthread * thread, uthread_func * func, uthread_arg arg, size_t stack_size) {
@@ -119,8 +149,9 @@ int uthread_create(uthread * thread, uthread_func * func, uthread_arg arg, size_
         uthread main_thread;
         uthread_clear(&main_thread);
         main_thread.state = RUNNING;
-        struct uthread_extra main_extra = {0};
-        main_thread.extra = &main_extra;
+        struct uthread_extra * main_extra = malloc(sizeof(struct uthread_extra));
+        memset(main_extra, 0, sizeof(struct uthread_extra));
+        main_thread.extra = main_extra;
         uthread_scheduler.current = &main_thread;
 
         // interrupt every 5000 us
@@ -143,8 +174,14 @@ int uthread_create(uthread * thread, uthread_func * func, uthread_arg arg, size_
     thread->stack.size = stack_size;
 
     thread->state = NEW;
-    struct uthread_extra extra = {.func=func, .arg=&arg, .ctx=NULL};
-    thread->extra = &extra;
+
+    struct uthread_extra * extra = malloc(sizeof(struct uthread_extra));
+    extra->func = func;
+    extra->arg = arg;
+    extra->ctx = NULL;
+    extra->wait_target = NULL;
+
+    thread->extra = extra;
     _uthread_sched_enqueue(thread);
 
     return 0;
@@ -158,9 +195,8 @@ void uthread_exit(void) {
 void uthread_join(uthread * thread) {
     uthread * this_thread = uthread_self();
     this_thread->state = WAITING;
-    while (thread->state != DONE);
-        // wait
-    this_thread->state = RUNNING;
+    struct uthread_extra * extra = this_thread->extra;
+    extra->wait_target = thread;
 }
 
 uthread * uthread_self(void) {

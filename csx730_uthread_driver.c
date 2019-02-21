@@ -33,7 +33,7 @@ int main() {
 	// uthread_join(&thread1);
 	// uthread_join(&thread2);
 	// sleep(1);
-	for(;;);
+	for(int i=0; i<5000000; i++);
 
 	printf("done");
 } // main

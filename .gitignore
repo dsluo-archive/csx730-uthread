@@ -8,3 +8,5 @@ core.*
 
 .vscode/
 doc/
+
+csx730_uthread_driver
