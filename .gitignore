@@ -6,3 +6,6 @@ a.out
 core.*
 *.dSYM/
 
+.vscode/
+csx730_uthread_driver
+doc/
