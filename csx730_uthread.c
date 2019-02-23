@@ -11,8 +11,6 @@
 
 #include <stdio.h>
 
-// http://www.evanjones.ca/software/threading.html
-
 struct uthread_node {
     uthread * thread;
     struct uthread_node * next;
@@ -41,24 +39,36 @@ void block_int(void) {
     sigset_t sigmask;
     sigemptyset(&sigmask);
     sigaddset(&sigmask, SIGPROF);
-    sigprocmask(SIG_BLOCK, &sigmask, NULL);
+    int status = sigprocmask(SIG_BLOCK, &sigmask, NULL);
+    if (status != 0)
+        perror("block");
 }
 
 void unblock_int(void) {
     sigset_t sigmask;
     sigemptyset(&sigmask);
     sigaddset(&sigmask, SIGPROF);
-    sigprocmask(SIG_UNBLOCK, &sigmask, NULL);
+    int status = sigprocmask(SIG_UNBLOCK, &sigmask, NULL);
+    if (status != 0)
+        perror("unblock");
 }
 
 void interrupt(int signum) {
-    if (signum != SIGPROF)
+    block_int();
+
+
+    if (signum != SIGPROF) {
+        unblock_int();
         return;
+    }
     
     uthread * thread = _uthread_sched_dequeue();
     if (thread == NULL) {
+        unblock_int();
         return;
     }
+    if (thread->state == DONE)
+        printf("thread done\n");
 
     if (thread->state == NEW || thread->state == RUNNING || thread->state == WAITING) {
         jmp_buf ctx;
@@ -68,6 +78,10 @@ void interrupt(int signum) {
             _uthread_sched_enqueue(uthread_scheduler.current);
 
             uthread_scheduler.current = thread;
+
+            int id = ((struct uthread_extra *) uthread_scheduler.current->extra)->thread_id;
+            printf("thread %d\n", id);
+
             if (thread->state == NEW) {
                 // start thread
                 thread->state = RUNNING;
@@ -77,31 +91,37 @@ void interrupt(int signum) {
                 void * rsptr = thread->stack.rsp;
 
                 unblock_int();
-                __asm__("movq %0, %%rsp;"
+                __asm__ ("movq %0, %%rsp;"
                         :
                         : "r" (rsptr)
                         : "rsp");
                 (*func)(arg);
                 block_int();
-                thread->state = DONE;
-                interrupt(signum);
+                uthread_scheduler.current->state = DONE;
+                interrupt(SIGPROF);
             } else {
                 jmp_buf * new_ctx = ((struct uthread_extra *) thread->extra)->ctx;
                 unblock_int();
                 longjmp(*new_ctx, 1);
             }
-        } else
-            unblock_int();
+        }
     } else { // thread is done
         free(thread->extra);
         int status = munmap(thread->stack.start, thread->stack.size);
         if (status != 0)
-            perror("Could not deallocate thread stack");
+            perror("Could not deallocate thread stack.");
+        interrupt(SIGPROF);
     }
+    unblock_int();
 }
 
 void uthread_clear(uthread * thread) {
     memset(thread, 0, sizeof(uthread));
+}
+
+void exited(void) {
+    // printf("asdf\n");
+    for (uthread * thread; thread != NULL; thread = _uthread_sched_dequeue());
 }
 
 int uthread_create(uthread * thread, uthread_func * func, uthread_arg arg, size_t stack_size) {
@@ -124,6 +144,7 @@ int uthread_create(uthread * thread, uthread_func * func, uthread_arg arg, size_
         uthread_scheduler.main_thread.state = RUNNING;
         uthread_scheduler.current = &uthread_scheduler.main_thread;
         // _uthread_sched_enqueue(&uthread_scheduler.main_thread);
+        atexit(&exited);
 
         uthread_scheduler.timer.it_value.tv_sec = 0;
         uthread_scheduler.timer.it_value.tv_usec = 5000;
@@ -155,6 +176,7 @@ int uthread_create(uthread * thread, uthread_func * func, uthread_arg arg, size_
 
     unblock_int();
     raise(SIGPROF);
+    // interrupt(SIGPROF);
     return 0;
 }
 
