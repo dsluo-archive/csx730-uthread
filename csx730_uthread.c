@@ -89,8 +89,6 @@ void interrupt(int signum) {
         unblock_int();
         return;
     }
-    if (thread->state == DONE)
-        printf("thread done\n");
 
     if (thread->state == NEW || thread->state == RUNNING || thread->state == WAITING) {
         jmp_buf ctx;
@@ -100,9 +98,6 @@ void interrupt(int signum) {
             _uthread_sched_enqueue(uthread_scheduler.current);
 
             uthread_scheduler.current = thread;
-
-            int id = ((struct uthread_extra *) uthread_scheduler.current->extra)->thread_id;
-            printf("thread %d\n", id);
 
             if (thread->state == NEW) {
                 // start thread
