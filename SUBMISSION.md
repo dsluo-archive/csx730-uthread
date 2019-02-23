@@ -8,7 +8,7 @@
 
 ## Implementation Overview
 
-You need to include a few sentences that provide an overview of your implementation in this section.
+Implements a round-robin scheduled thread system. Threads are executed in the order they are created, beginning with the main thread.
 
 ## 6730 Requirements
 
@@ -19,30 +19,30 @@ I would like the grader to check for the following 6730 requirements:
 
 1. What do you think was the motivation behind assigning this project in this class?
 
-   Your answer here.
+   To gain an understanding about multitasking and context switching.
 
 1. What is the most important thing you learned in this project?
 
-   Your answer here.
+   I feel like I learned a lot about how memory is structured and how that structure affects what is currently being executed.
 
 1. What do you wish you had spent more time on or done differently?
 
-   Your answer here.
+   I wish I started way earlier. There were a lot of edge cases that I couldn't properly account for.
 
 1. What part of the project did you do your best work on?
 
-   Your answer here.
+   I think the queue and dequeue work as intended.
 
 1. What was the most enjoyable part of this project?
 
-   Your answer here.
+   Thinking about threading from the perspective of the implementer rather than the user.
 
 1. What was the least enjoyable part of this project?
 
-   Your answer here.
+   Not having enough time.
 
 1. How could your instructor change this project to make it better next time?
 
-   Your answer here.
+   Give more time. More heavily encourage starting early.
 
 
